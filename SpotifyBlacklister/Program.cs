@@ -60,6 +60,12 @@ foreach (var item in likedSongs)
     // Check if any of the track's artists are in the targetArtists list
     if (artists.Any(artist => ConfigManager.Instance.Data.Artists.Contains(artist.Name)))
     {
+        if(ConfigManager.Instance.Data.WhitelistedSongs.Contains(item.Track.Name))
+        {
+            Console.WriteLine($"Skipped {item.Track.Name} because it is in the whitelisted songs list.");
+            continue;
+        }
+
         // Unlike the song if it matches any of the target artists
         songQueueForDeletion.Add(track.Id);
         songsDeleted.TryAdd(track.Name, String.Join(", ", artists.Select(artist => artist.Name)));
