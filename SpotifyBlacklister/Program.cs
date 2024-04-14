@@ -1,35 +1,39 @@
-﻿using SpotifyAPI.Web;
+﻿using QuickConfig;
+using SpotifyAPI.Web;
 using SpotifyBlacklister.Configuration;
 using SpotifyBlacklister.Helpers;
 
-var config = SpotifyClientConfig.CreateDefault();
+ConfigManager configManager = new ConfigManager(System.Reflection.Assembly.GetExecutingAssembly().GetName().Name);
+Config config = configManager.GetConfig<Config>("Config");
 
-var request = new ClientCredentialsRequest(ConfigManager.Instance.Data.AppInformation.client_id, ConfigManager.Instance.Data.AppInformation.client_secret);
+SpotifyClientConfig spotifyConfig = SpotifyClientConfig.CreateDefault();
 
-if (!ConfigManager.Instance.Data.Token.IsTokenValid())
+var request = new ClientCredentialsRequest(config.AppInformation.client_id, config.AppInformation.client_secret);
+
+if (!config.Token.IsTokenValid())
 {
     var oauthClient = new OAuthClient();
-    var tokenRequest = new AuthorizationCodeRefreshRequest(ConfigManager.Instance.Data.AppInformation.client_id, ConfigManager.Instance.Data.AppInformation.client_secret, ConfigManager.Instance.Data.Token.refresh_token);
+    var tokenRequest = new AuthorizationCodeRefreshRequest(config.AppInformation.client_id, config.AppInformation.client_secret, config.Token.refresh_token);
 
     var response = await oauthClient.RequestToken(tokenRequest);
 
     if (response != null)
     {
-        ConfigManager.Instance.Data.Token.access_token = response.AccessToken;
-        ConfigManager.Instance.Data.Token.token_type = response.TokenType.ToString().ToLowerInvariant();
+        config.Token.access_token = response.AccessToken;
+        config.Token.token_type = response.TokenType.ToString().ToLowerInvariant();
         if (!String.IsNullOrEmpty(response.RefreshToken))
         {
-            ConfigManager.Instance.Data.Token.refresh_token = response.RefreshToken;
+            config.Token.refresh_token = response.RefreshToken;
         }
-        ConfigManager.Instance.Data.Token.expires_in = (uint)response.ExpiresIn;
-        ConfigManager.Instance.Data.Token.created_at = (uint)((DateTimeOffset)response.CreatedAt).ToUnixTimeSeconds();
-        ConfigManager.Instance.Data.Token.scope = response.Scope.ToString().ToLowerInvariant();
+        config.Token.expires_in = (uint)response.ExpiresIn;
+        config.Token.created_at = (uint)((DateTimeOffset)response.CreatedAt).ToUnixTimeSeconds();
+        config.Token.scope = response.Scope.ToString().ToLowerInvariant();
 
-        ConfigManager.Instance.Save();
+        config.Save();
     }
 }
 
-var spotify = new SpotifyClient(config.WithToken(ConfigManager.Instance.Data.Token.access_token));
+var spotify = new SpotifyClient(spotifyConfig.WithToken(config.Token.access_token));
 
 // Get the user's liked songs
 int Count = 50;
@@ -50,6 +54,7 @@ for(int Offset = 0; Offset < Count; Offset += 50)
 }
 
 // Go through songs and queue them for deletion
+
 List<string> songQueueForDeletion = new List<string>();
 Dictionary<string, string> songsDeleted = new Dictionary<string, string>();
 foreach (var item in likedSongs)
@@ -58,12 +63,16 @@ foreach (var item in likedSongs)
     var artists = track.Artists;
 
     // Check if any of the track's artists are in the targetArtists list
-    if (artists.Any(artist => ConfigManager.Instance.Data.Artists.Contains(artist.Name)))
+    if (artists.Any(artist => config.BlacklistedArtists.Any(blacklistedArtist => blacklistedArtist.Name == artist.Name)))
     {
-        if(ConfigManager.Instance.Data.WhitelistedSongs.Contains(item.Track.Name))
+        foreach (var artist in artists)
         {
-            Console.WriteLine($"Skipped {item.Track.Name} because it is in the whitelisted songs list.");
-            continue;
+            var blacklistedArtist = config.BlacklistedArtists.FirstOrDefault(a => a.Name == artist.Name);
+            if (blacklistedArtist != null && blacklistedArtist.ExceptedSongs.Contains(item.Track.Name))
+            {
+                Console.WriteLine($"Skipped {item.Track.Name} by {artist.Name} because it is in the whitelisted songs list for this artist.");
+                continue;
+            }
         }
 
         // Unlike the song if it matches any of the target artists
@@ -81,7 +90,7 @@ if (songQueueForDeletion.Count > 0)
     await spotify.Library.RemoveTracks(new LibraryRemoveTracksRequest(songQueueForDeletion));
 
     // Send e-mail
-    EmailHelper.SendEmailWithDeletedSongs(songsDeleted);
+    EmailHelper.SendEmailWithDeletedSongs(config, songsDeleted);
 }
 
 // Finished

@@ -12,21 +12,21 @@ namespace SpotifyBlacklister.Helpers
 {
     public class EmailHelper
     {
-        public static void SendEmailWithDeletedSongs(Dictionary<string, string> deletedSongs)
+        public static void SendEmailWithDeletedSongs(Config config, Dictionary<string, string> deletedSongs)
         {
-            var fromAddress = new MailAddress(ConfigManager.Instance.Data.EmailServer.FromAddress, Assembly.GetCallingAssembly().GetName().Name.Replace(" ", ""));
-            var toAddress = new MailAddress(ConfigManager.Instance.Data.EmailServer.ToAddress);
+            var fromAddress = new MailAddress(config.EmailServer.FromAddress, Assembly.GetCallingAssembly().GetName().Name.Replace(" ", ""));
+            var toAddress = new MailAddress(config.EmailServer.ToAddress);
             const string subject = "Deleted Songs";
             string body = GenerateEmailBody(deletedSongs);
 
             var smtp = new SmtpClient
             {
-                Host = ConfigManager.Instance.Data.EmailServer.SmtpServer, 
-                Port = ConfigManager.Instance.Data.EmailServer.SmtpPort,
+                Host = config.EmailServer.SmtpServer, 
+                Port = config.EmailServer.SmtpPort,
                 EnableSsl = true,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
                 UseDefaultCredentials = false,
-                Credentials = new NetworkCredential(fromAddress.Address, ConfigManager.Instance.Data.EmailServer.Password)
+                Credentials = new NetworkCredential(fromAddress.Address, config.EmailServer.Password)
             };
 
             using (var message = new MailMessage(fromAddress, toAddress)
